@@ -1,0 +1,69 @@
+from fuzzywuzzy import fuzz
+import pandas as pd
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split
+
+
+# data = pd.read_csv('/content/drive/MyDrive/FYP DSAI/Data/Test Recommendation Model Data/test recommendation - modified.csv')
+data = pd.read_excel('/content/drive/MyDrive/FYP DSAI/Data/Test Recommendation Model Data/TestRecommenderModel/Data/SymptomsWithVaiations.xlsx')
+
+column_names = data.columns.tolist()
+
+# Assuming 'your_dataframe' is your DataFrame
+shuffled_dataframe = data.sample(frac=1.0, random_state=42)
+
+# Reset the index after shuffling
+shuffled_dataframe.reset_index(drop=True, inplace=True)
+
+# Load the symptom dictionary
+symptoms_df = pd.read_csv('/content/drive/MyDrive/FYP DSAI/Data/Test Recommendation Model Data/TestRecommenderModel/Utility/symptoms_with_ids.csv')
+
+# Load the tests dictionary
+tests_df = pd.read_csv('/content/drive/MyDrive/FYP DSAI/Data/Test Recommendation Model Data/TestRecommenderModel/Utility/TestPredictionID.csv')
+
+
+# Split the data into feature variables (X) and the target variable (y)
+X = shuffled_dataframe.drop(columns=['target'])
+y = shuffled_dataframe['target']
+
+# Create and train the Naive Bayes (MultinomialNB) model
+nb = MultinomialNB()
+nb.fit(X, y)
+
+# Predict probabilities on test data
+nb_probabilities = nb.predict_proba(X)
+
+# Accept user input for symptoms and their severities
+user_input = input("Enter symptoms and their severities separated by commas (e.g., symptom1-0.25,symptom2-0.5,symptom3-1): ")
+user_symptoms_severities = [tuple(symptom.split('-')) for symptom in user_input.split(',')]
+
+print('Entered symptoms and severities are: ', user_symptoms_severities)
+
+# Match user input symptoms with the symptom dictionary using fuzzywuzzy
+matched_symptoms = []
+for user_symptom, severity in user_symptoms_severities:
+    best_match = max(symptoms_df['Symptom'], key=lambda symptom: fuzz.partial_ratio(user_symptom, symptom))
+    matched_symptoms.append((best_match, float(severity)))
+
+print(matched_symptoms)
+symptoms_dict = {}
+
+for symptom, value in matched_symptoms:
+    symptoms_dict[symptom] = value
+
+
+symptom_vector = [symptoms_dict[symptom] if symptom in symptoms_dict else 0 for symptom in symptoms_df['Symptom']]
+
+symptoms_vector = [symptom_vector]
+
+# Use the trained RFC model to predict the test group and probabilities
+predicted_test_group_nb = nb.predict(symptoms_vector)
+predicted_test_group_probabilities_nb = nb.predict_proba(symptoms_vector)
+
+
+# Print the predicted test group probabilities for nb
+print(f"Predicted Test Group Probabilities (nb):")
+for i, prob in enumerate(predicted_test_group_probabilities_nb[0]):
+    print(f"Test Group {i+1}: {prob:.2f}")
